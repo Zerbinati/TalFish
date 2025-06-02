@@ -1252,6 +1252,56 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied) const {
         | (attacks_bb<KING>(s)             & pieces(KING));
 }
 
+// Implementazioni delle nuove funzioni
+
+Bitboard Position::opponent_king_zone() const {
+    Square kingSq = king_square(~side_to_move()); // Ottieni il re avversario
+    return this->king_zone(kingSq);              // Calcola la zona del re
+}
+
+Bitboard Position::king_area(Color c) const {
+    Square kingSq = square<KING>(c);
+    return this->king_zone(kingSq); // Usa il metodo membro
+}
+
+Square Position::king_square(Color c) const {
+    return square<KING>(c); // Restituisce la posizione del re
+}
+
+Bitboard Position::isolated_pawns() const {
+    // Calcola i pedoni isolati
+    Bitboard pawns = pieces(PAWN);
+    Bitboard isolated = 0;
+    for (File f = FILE_A; f <= FILE_H; ++f) {
+        Bitboard fileBB = file_bb(f);
+        if (!(pawns & (fileBB << 1)) && !(pawns & (fileBB >> 1))) {
+            isolated |= pawns & fileBB;
+        }
+    }
+    return isolated;
+}
+
+Bitboard Position::king_zone(Square kingSq) const {
+    Bitboard zone = square_bb(kingSq); // Partiamo dalla posizione del re
+    zone |= shift<NORTH>(zone) | shift<SOUTH>(zone); // Espansione verticale
+    zone |= shift<EAST>(zone)  | shift<WEST>(zone);  // Espansione orizzontale
+    zone |= shift<NORTH_EAST>(zone) | shift<NORTH_WEST>(zone); // Diagonali sopra
+    zone |= shift<SOUTH_EAST>(zone) | shift<SOUTH_WEST>(zone); // Diagonali sotto
+    return zone;
+}
+
+Bitboard Position::doubled_pawns() const {
+    // Calcola i pedoni doppiati
+    Bitboard pawns = pieces(PAWN);
+    Bitboard doubled = 0;
+    for (File f = FILE_A; f <= FILE_H; ++f) {
+        Bitboard fileBB = file_bb(f);
+        if (popcount(pawns & fileBB) > 1) {
+            doubled |= pawns & fileBB;
+        }
+    }
+    return doubled;
+}
 
 /// Position::legal() tests whether a pseudo-legal move is legal
 
@@ -2050,10 +2100,123 @@ bool Position::pos_is_ok() const {
               || castlingRightsMask[castlingRookSquare[cr]] != cr
               || (castlingRightsMask[square<KING>(c)] & cr) != cr)
               assert(0 && "pos_is_ok: Castling");
-      }
-
-  return true;
 }
 
+return true;
+}
+
+int Position::knight_pair_bonus() const {
+    // Restituisce 1 se un colore ha almeno due cavalli
+    return (count<KNIGHT>(WHITE) >= 2 || count<KNIGHT>(BLACK) >= 2) ? 1 : 0;
+}
+
+int Position::bishop_pair_bonus() const {
+    // Restituisce 1 se un colore ha almeno due alfieri
+    return (count<BISHOP>(WHITE) >= 2 || count<BISHOP>(BLACK) >= 2) ? 1 : 0;
+}
+
+int Position::aggressiveness_score() const {
+    // Calcola il numero di pezzi che attaccano la zona del re avversario
+    Bitboard attackingPieces = pieces(side_to_move(), QUEEN, ROOK, BISHOP, KNIGHT);
+    return popcount(attackingPieces & opponent_king_zone());
+}
+
+int Position::risk_taking_score() const {
+    // Premia squilibri materiali (es. Torre contro due pezzi leggeri)
+    return is_unbalanced_material() ? 10 : 0; // Ritorna un valore arbitrario per il rischio
+}
+
+int Position::king_exposure() const {
+    // Penalizza la posizione in base alle minacce contro il re
+    Bitboard kingZone = king_area(side_to_move());
+    return popcount(attackers_to(king_square(side_to_move())) & kingZone);
+}
+
+int Position::piece_mobility() const {
+    // Calcola la mobilità dei pezzi principali
+    int mobility = 0;
+    mobility += popcount(pieces(QUEEN)) * 2; // Regine più influenti
+    mobility += popcount(pieces(ROOK));
+    mobility += popcount(pieces(BISHOP));
+    mobility += popcount(pieces(KNIGHT));
+    return mobility;
+}
+
+int Position::pawn_structure_score() const {
+    // Calcola penalità per difetti nella struttura pedonale
+    int score = 0;
+    score -= popcount(pieces(PAWN) & isolated_pawns()) * 10; // Penalizza pedoni isolati
+    score -= popcount(pieces(PAWN) & doubled_pawns()) * 10;  // Penalizza pedoni doppiati
+    return score;
+}
+
+bool Position::is_attacking() const {
+    // Determina se la posizione è aggressiva (minaccia attacchi significativi)
+    Bitboard attackingPieces = pieces(side_to_move(), QUEEN, ROOK, BISHOP, KNIGHT);
+    return popcount(attackingPieces & opponent_king_zone()) > 2; // Almeno 3 pezzi attaccano
+}
+
+bool Position::is_unbalanced_material() const {
+    // Verifica se la posizione ha squilibri materiali (esempio: Torre contro pezzi leggeri)
+    int major = count<ROOK>(WHITE) + count<ROOK>(BLACK) + count<QUEEN>(WHITE) + count<QUEEN>(BLACK);
+    int minors = count<BISHOP>(WHITE) + count<BISHOP>(BLACK) + count<KNIGHT>(WHITE) + count<KNIGHT>(BLACK);
+    return std::abs(major - minors) > 1; // Squilibrio significativo
+}
+
+int Position::king_safety(Color c) const {
+    // Calcola un valore base per la sicurezza del re
+    Bitboard kingZone = king_area(c);
+    int safety = popcount(attackers_to(king_square(c)) & kingZone);
+    return safety * 5; // Penalità arbitraria per ogni minaccia
+}
+
+int Position::mobility_score(Color c) const {
+    int mobility = 0;
+    Bitboard queens = pieces(QUEEN, c);
+    Bitboard rooks = pieces(ROOK, c);
+    Bitboard bishops = pieces(BISHOP, c);
+    Bitboard knights = pieces(KNIGHT, c);
+
+    // Usa il bitboard corretto per l'occupazione durante il calcolo degli attacchi
+    Bitboard occupied = pieces();
+
+    while (queens)
+        mobility += popcount(attacks_bb<QUEEN>(pop_lsb(queens), occupied));
+
+    while (rooks)
+        mobility += popcount(attacks_bb<ROOK>(pop_lsb(rooks), occupied));
+
+    while (bishops)
+        mobility += popcount(attacks_bb<BISHOP>(pop_lsb(bishops), occupied));
+
+    while (knights)
+        mobility += popcount(attacks_bb<KNIGHT>(pop_lsb(knights)));
+
+    return mobility;
+}
+
+int Position::threat_score(Color c) const {
+    // Calcola una penalità per le minacce verso i pezzi del colore
+    Bitboard enemyPieces = pieces(~c);
+    Bitboard threatenedPieces = 0;
+
+    // Itera sui pezzi nemici per verificare chi è sotto attacco
+    while (enemyPieces) {
+        Square sq = pop_lsb(enemyPieces); // Estrae una posizione alla volta
+        if (attackers_to(sq)) {
+            threatenedPieces |= sq; // Aggiungi il pezzo minacciato
+        }
+    }
+
+    // Calcola il punteggio basato sui pezzi minacciati
+    return popcount(threatenedPieces) * 10; // Penalità arbitraria per pezzo minacciato
+}
+
+int Position::weakness_score(Color c) const {
+    // Calcola penalità per pedoni deboli
+    Bitboard pawns = pieces(PAWN, c);
+    Bitboard weakPawns = pawns & (isolated_pawns() | doubled_pawns());
+    return popcount(weakPawns) * 15; // Penalità arbitraria per ogni pedone debole
+}
 
 } // namespace Stockfish
