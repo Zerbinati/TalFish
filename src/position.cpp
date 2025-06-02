@@ -2054,4 +2054,6 @@ bool Position::pos_is_ok() const {
   return true;
 }
 
+}
+
 } // namespace Stockfish
