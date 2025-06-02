@@ -31,6 +31,7 @@
 #include "thread.h"
 #include "tt.h"
 #include "uci.h"
+#include "types.h"
 
 using std::string;
 
@@ -2054,6 +2055,5 @@ bool Position::pos_is_ok() const {
   return true;
 }
 
-}
 
 } // namespace Stockfish
