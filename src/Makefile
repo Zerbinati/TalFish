@@ -56,12 +56,17 @@ else
 endif
 
 ### Source and object files
-SRCS = benchmark.cpp bitbase.cpp bitboard.cpp endgame.cpp evaluate.cpp experience.cpp main.cpp \
+SRCS = benchmark.cpp bitbase.cpp bitboard.cpp endgame.cpp evaluate.cpp main.cpp \
 	material.cpp misc.cpp movegen.cpp movepick.cpp pawns.cpp polybook.cpp position.cpp psqt.cpp \
-	search.cpp thread.cpp timeman.cpp tt.cpp uci.cpp ucioption.cpp tune.cpp
+	search.cpp thread.cpp timeman.cpp tt.cpp uci.cpp ucioption.cpp tune.cpp \
+	personalities/personality.cpp
+
+HEADERS = benchmark.h bitboard.h evaluate.h \
+          personalities/personality.h
 
 OBJS = $(notdir $(SRCS:.cpp=.o))
 
+VPATH = personalities:src
 
 ### ==========================================================================
 ### Section 2. High-level Configuration

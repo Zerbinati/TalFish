@@ -21,7 +21,7 @@
 
 #include "bitboard.h"
 #include "endgame.h"
-					 
+
 #include "misc.h"
 #include "polybook.h"
 #include "position.h"
@@ -30,7 +30,6 @@
 #include "thread.h"
 #include "tt.h"
 #include "uci.h"
-#include "experience.h"
 
 using namespace Stockfish;
 
@@ -61,14 +60,12 @@ int main(int argc, char* argv[]) {
   Position::init();
   Bitbases::init();
   Endgames::init();
-  Experience::init();
   Threads.set(size_t(Options["Threads"]));
   polybook[0].init(Options["Book File"]);
   Search::clear(); // After threads are up
 
   UCI::loop(argc, argv);
 
-  Experience::unload();
   Threads.set(0);
   return 0;
 }

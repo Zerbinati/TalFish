@@ -25,7 +25,6 @@
 
 #include "polybook.h"
 #include "evaluate.h"
-#include "experience.h"
 #include "misc.h"
 #include "movegen.h"
 #include "movepick.h"
@@ -36,8 +35,12 @@
 #include "tt.h"
 
 #include "uci.h"
+#include "personalities/personality.h"
 
 namespace Stockfish {
+    namespace UCI {
+        extern bool personalityChanged; 
+    }
 
 namespace Search {
 
@@ -165,8 +168,6 @@ void Search::clear() {
   Time.availableNodes = 0;
   TT.clear();
   Threads.clear();
-    Experience::save();
-    Experience::resume_learning();
 }
 
 
@@ -181,9 +182,6 @@ void MainThread::search() {
       sync_cout << "\nNodes searched: " << nodes << "\n" << sync_endl;
       return;
   }
-
-  //Make sure experience has finished loading
-  Experience::wait_for_loading_finished();
 
   Color us = rootPos.side_to_move();
   Time.init(Limits, us, rootPos.game_ply());
@@ -201,90 +199,9 @@ void MainThread::search() {
   else
   {
       if (!Limits.infinite && !Limits.mate)
-      {
           //Check polyglot books first
           if ((bool)Options["PersonalityBook"] && rootPos.game_ply() / 2 < (int)Options["Book Depth"])
               bookMove = polybook[0].probe(rootPos, (int)Options["Book Width"]);
-
-          //Check experience book second
-          if (bookMove == MOVE_NONE && (bool)Options["Experience Book"] && rootPos.game_ply() / 2 < (int)Options["Memory Max Moves"] && Experience::enabled())
-          {
-              Depth expBookMinDepth = (Depth)Options["Experience Book Min Depth"];
-              const Experience::ExpEntryEx* exp = Experience::probe(rootPos.key());
-
-              if (exp)
-              {
-                  int evalImportance = (int)Options["Experience Book Eval Importance"];
-                  vector<pair<const Experience::ExpEntryEx*, int>> quality;
-                  const Experience::ExpEntryEx* temp = exp;
-                  while (temp)
-                  {
-                      if (temp->depth >= expBookMinDepth)
-                      {
-                          pair<int, bool> q = temp->quality(rootPos, evalImportance);
-                          if (q.first > 0 && !q.second)
-                              quality.emplace_back(temp, q.first);
-                      }
-
-                      temp = temp->next;
-                  }
-
-                  //Sort experience moves based on quality
-                  stable_sort(
-                      quality.begin(),
-                      quality.end(),
-                      [](const pair<const Experience::ExpEntryEx*, int>& a, const pair<const Experience::ExpEntryEx*, int>& b)
-                      {
-                          return a.second > b.second;
-                      });
-
-                  if (quality.size())
-                  {
-                      //Sort experience moves based on quality
-                      stable_sort(
-                          quality.begin(),
-                          quality.end(),
-                          [](const pair<const Experience::ExpEntryEx*, int>& a, const pair<const Experience::ExpEntryEx*, int>& b)
-                          {
-                              return a.second > b.second;
-                          });
-
-                      //Provide some info to the GUI about available exp moves
-                      int expCount = 0;
-                      for (auto it = quality.rbegin(); it != quality.rend(); ++it)
-                      {
-                          ++expCount;
-
-                          sync_cout
-                              << "info"
-                              << " depth "    << it->first->depth
-                              << " seldepth " << it->first->depth
-                              << " multipv 1"
-                              << " score "    << UCI::value(it->first->value)
-                              << " nodes "    << expCount
-                              << " nps 0"
-                              << " tbhits 0"
-                              << " time 0"
-                              << " pv " << UCI::move(it->first->move, rootPos.is_chess960())
-                              << sync_endl;
-                      }
-
-                      //Apply 'Best Move'
-                      if ((bool)Options["Experience Book Best Move"] == false && quality.size() > 1)
-                      {
-                          static PRNG rng(now());
-
-                          //Pick one move of the top 50%
-                          bookMove = quality[rng.rand<uint32_t>() % std::max<uint32_t>(quality.size() / 2, 2)].first->move;
-                      }
-                      else
-                      {
-                          bookMove = quality.front().first->move;
-                      }
-                  }
-              }
-          }
-      }
 
       if (bookMove != MOVE_NONE && std::find(rootMoves.begin(), rootMoves.end(), bookMove) != rootMoves.end())
       {
@@ -320,77 +237,34 @@ void MainThread::search() {
       Time.availableNodes += Limits.inc[us] - Threads.nodes_searched();
 
   Thread* bestThread = this;
-  Skill skill = Skill(Options["Skill Level"], Options["UCI_LimitStrength"] ? int(Options["UCI_Elo"]) : 0);
+
+	int humanImperfection  = Stockfish::activePersonality.get_evaluation_param("HumanImperfection", 0);
+
+	// Print **`SEARCH PARAMETERS`** only if the personality has been changed
+	if (Stockfish::UCI::personalityChanged) {
+		std::cout << "info string === SEARCH PARAMETERS ===" << std::endl;
+	    std::cout << "info string HumanImperfection: " << humanImperfection << std::endl;
+
+    std::cout << "info string ==========================" << std::endl;
+
+		Stockfish::UCI::personalityChanged = false;
+	}
+  static int lastElo = -1;  // Store the previous Elo value
+
+  int currentElo = int(Options["Elo"]);
+
+  if (currentElo != lastElo) {  // Print only if the value has changed
+      std::cout << "info string DEBUG: UCI Elo = " << currentElo << std::endl;
+      lastElo = currentElo;  // Update lastElo with the new value
+  }
+
+  Skill skill = Skill(Options["Skill Level"], currentElo);  // Use the current Elo value
 
   if (   int(Options["MultiPV"]) == 1
       && !Limits.depth
       && !skill.enabled()
       && rootMoves[0].pv[0] != MOVE_NONE)
       bestThread = Threads.get_best_thread();
-
-  if (    bookMove == MOVE_NONE
-      && !Experience::is_learning_paused()
-      && !bestThread->rootPos.is_chess960()
-      && !(bool)Options["Experience Readonly"]
-	  && !(bool)Options["UCI_LimitStrength"]
-	  &&  bestThread->completedDepth >= EXP_MIN_DEPTH)
-  {
-      //Add best move
-      Experience::add_pv_experience(bestThread->rootPos.key(), bestThread->rootMoves[0].pv[0], bestThread->rootMoves[0].score, bestThread->completedDepth);
-
-      //Add moves from other threads
-      struct UniqueMoveInfo
-      {
-          Move move;
-          Depth depth;
-          Value scoreSum;
-          int count;
-      };
-
-      std::map<Move, UniqueMoveInfo> uniqueMoves;
-      for (Thread* th : Threads)
-      {
-          //Skip 'bestMove' becasue it was already added it
-          if (th->rootMoves[0].pv[0] == bestThread->rootMoves[0].pv[0])
-              continue;
-
-          UniqueMoveInfo thisMove{ th->rootMoves[0].pv[0], th->completedDepth, th->rootMoves[0].score, 1 };
-          std::map<Move, UniqueMoveInfo>::iterator existingMove = uniqueMoves.find(thisMove.move);
-          if (existingMove == uniqueMoves.end())
-          {
-              uniqueMoves[thisMove.move] = thisMove;
-              continue;
-          }
-
-          //Is 'thisMove' better than 'existingMove'?
-          if (thisMove.depth > existingMove->second.depth)
-          {
-              uniqueMoves[thisMove.move] = thisMove;
-          }
-          else if (thisMove.depth == existingMove->second.depth)
-          {
-              uniqueMoves[thisMove.move].scoreSum += thisMove.scoreSum;
-              uniqueMoves[thisMove.move].count++;
-          }
-      }
-
-      //Add to MultiPV exp
-      for (const std::pair<Move, UniqueMoveInfo> mv : uniqueMoves)
-      {
-          Experience::add_multipv_experience(
-              rootPos.key(),
-              mv.second.move,
-              mv.second.scoreSum / mv.second.count,
-              mv.second.depth);
-      }
-
-      //Save experience if game is decided
-      if (Utility::is_game_decided(rootPos, bestThread->rootMoves[0].score))
-      {
-          Experience::save();
-          Experience::pause_learning();
-      }
-  }
 
   bestPreviousScore = bestThread->rootMoves[0].score;
   bestPreviousAverageScore = bestThread->rootMoves[0].averageScore;
@@ -399,6 +273,20 @@ void MainThread::search() {
   if (bestThread != this)
       sync_cout << UCI::pv(bestThread->rootPos, bestThread->completedDepth) << sync_endl;
 
+  // Retrieve the value of HumanImperfection
+  int imperfection = int(Options["HumanImperfection"]);
+
+  // If HumanImperfection > 0, we might choose a suboptimal move
+  if (imperfection > 0 && bestThread->rootMoves.size() > 1) {
+      int randomValue = rand() % 100; // Random number between 0 and 99
+
+      // If the random value is lower than HumanImperfection, choose a worse move
+      if (randomValue < imperfection) {
+          std::cout << "info string [Human Imperfection] Altering best move selection..." << std::endl;
+          std::swap(bestThread->rootMoves[0], bestThread->rootMoves[1]); // Choose the second-best move
+      }
+  }
+
   sync_cout << "bestmove " << UCI::move(bestThread->rootMoves[0].pv[0], rootPos.is_chess960());
 
   if (bestThread->rootMoves[0].pv.size() > 1 || bestThread->rootMoves[0].extract_ponder_from_tt(rootPos))
@@ -406,7 +294,6 @@ void MainThread::search() {
 
   std::cout << sync_endl;
 }
-
 
 /// Thread::search() is the main iterative deepening loop. It calls search()
 /// repeatedly with increasing depth until the allocated thinking time has been
@@ -452,8 +339,8 @@ void Thread::search() {
               mainThread->iterValue[i] = mainThread->bestPreviousScore;
   }
 
-  size_t multiPV = size_t(Options["MultiPV"]);
-  Skill skill(Options["Skill Level"], Options["UCI_LimitStrength"] ? int(Options["UCI_Elo"]) : 0);
+      size_t multiPV = size_t(Options["MultiPV"]);
+  Skill skill(Options["Skill Level"], Options["Personality"] ? int(Options["Elo"]) : 0);
 
   // When playing with strength handicap enable MultiPV search that we will
   // use behind-the-scenes to retrieve a set of possible moves.
@@ -762,65 +649,6 @@ int moveCount, captureCount, quietCount, improvement;
     // to save indentation, we list the condition in all code between here and there.
     if (!excludedMove)
         ss->ttPv = PvNode || (ss->ttHit && tte->is_pv());
-
-    //Probe experience data
-    const Experience::ExpEntryEx *expEx = excludedMove == MOVE_NONE && Experience::enabled() ? Experience::probe(pos.key()) : nullptr;
-    const Experience::ExpEntryEx* tempExp = expEx;
-    const Experience::ExpEntryEx* bestExp = nullptr;
-
-    //Update update quiet stats, continuation histories, and main history from experience data
-    while (tempExp)
-    {
-        if (tempExp->depth >= depth)
-        {
-            //Got better experience entry than TT entry?
-            if (!bestExp && (!ss->ttHit || tempExp->depth > tte->depth()))
-            {
-                bestExp = tempExp;
-
-                ss->ttHit = true;
-                ttMove = bestExp->move;
-                ttValue = value_from_tt(bestExp->value, ss->ply, pos.rule50_count());
-                ss->ttPv = true;
-
-                //Save to TT using 'posKey'
-                tte->save(posKey,
-                    ttValue,
-                    ss->ttPv,
-                    ttValue >= beta ? BOUND_LOWER : BOUND_EXACT,
-                    bestExp->depth,
-                    ttMove,
-                    VALUE_NONE);
-
-                //Nothing else to do if PV node
-                if (PvNode)
-                    break;
-            }
-
-            if (!PvNode)
-            {
-                Value expValue = value_from_tt(tempExp->value, ss->ply, pos.rule50_count());
-                if (expValue >= beta)
-                {
-                    if (!pos.capture(tempExp->move))
-                        update_quiet_stats(pos, ss, tempExp->move, stat_bonus(tempExp->depth));
-
-                    // Extra penalty for early quiet moves of the previous ply
-                    if (prevSq != SQ_NONE && (ss-1)->moveCount <= 2 && !priorCapture)
-                        update_continuation_histories(ss-1, pos.piece_on(prevSq), prevSq, -stat_bonus(tempExp->depth + 1));
-                }
-                // Penalty for a quiet tempExp->move() that fails low
-                else if (!pos.capture(tempExp->move))
-                {
-                    int penalty = -stat_bonus(tempExp->depth);
-                    thisThread->mainHistory[us][from_to(tempExp->move)] << penalty;
-                    update_continuation_histories(ss, pos.moved_piece(tempExp->move), to_sq(tempExp->move), penalty);
-                }
-            }
-        }
-
-        tempExp = tempExp->next;
-    }
 
     // At non-PV nodes we check for an early TT cutoff
     if (  !PvNode

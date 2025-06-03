@@ -44,6 +44,10 @@ using namespace std;
 namespace Stockfish {
 
 namespace Eval {
+	
+    // Definition of activePersonality
+//    Personality activePersonality;
+
 
     // Funzione per stampare un messaggio informativo sulla valutazione classica
     void print_classical_eval_message() {
@@ -62,7 +66,7 @@ namespace Trace {
 
   Score scores[TERM_NB][COLOR_NB];
 
-  static double to_cp(Value v) { return double(v) / UCI::NormalizeToPawnValue; }
+  static double to_cp(Value v) { return double(v) / PawnValueEg; }
 
   static void add(int idx, Color c, Score s) {
     scores[idx][c] = s;

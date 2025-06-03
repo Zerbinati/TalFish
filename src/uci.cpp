@@ -24,7 +24,6 @@
 
 #include "benchmark.h"
 #include "evaluate.h"
-#include "experience.h"
 #include "movegen.h"
 #include "position.h"
 #include "search.h"
@@ -69,18 +68,12 @@ namespace {
     states = StateListPtr(new std::deque<StateInfo>(1)); // Drop the old state and create a new one
     pos.set(fen, Options["UCI_Chess960"], &states->back(), Threads.main());
 
-    Key firstKey = pos.key();
-
     // Parse the move list, if any
     while (is >> token && (m = UCI::to_move(pos, token)) != MOVE_NONE)
     {
         states->emplace_back();
         pos.do_move(m, states->back());
     }
-
-    static constexpr Key StartPosKey = 0xB4D30CD15A43432D;
-    if (firstKey == StartPosKey && pos.game_ply() == 0)
-        Experience::resume_learning();
   }
 
   // trace_eval() prints the evaluation of the current position, consistent with
@@ -210,17 +203,13 @@ namespace {
      // The coefficients of a third-order polynomial fit is based on the fishtest data
      // for two parameters that need to transform eval to the argument of a logistic
      // function.
-     constexpr double as[] = {   0.38036525,   -2.82015070,   23.17882135,  307.36768407};
-     constexpr double bs[] = {  -2.29434733,   13.27689788,  -14.26828904,   63.45318330 };
-
-     // Enforce that NormalizeToPawnValue corresponds to a 50% win rate at ply 64
-     static_assert(UCI::NormalizeToPawnValue == int(as[0] + as[1] + as[2] + as[3]));
-
+     double as[] = { 0.50379905,  -4.12755858,  18.95487051, 152.00733652};
+     double bs[] = {-1.71790378,  10.71543602, -17.05515898,  41.15680404};
      double a = (((as[0] * m + as[1]) * m + as[2]) * m) + as[3];
      double b = (((bs[0] * m + bs[1]) * m + bs[2]) * m) + bs[3];
 
      // Transform the eval to centipawns with limited range
-     double x = std::clamp(double(v), -4000.0, 4000.0);
+     double x = std::clamp(double(100 * v) / PawnValueEg, -2000.0, 2000.0);
 
      // Return the win rate in per mille units rounded to the nearest value
      return int(0.5 + 1000 / (1 + std::exp((a - x) / b)));
@@ -275,13 +264,7 @@ void UCI::loop(int argc, char* argv[]) {
       else if (token == "go")         go(pos, is, states);
       else if (token == "position")   position(pos, is, states);
       else if (token == "ucinewgame") Search::clear();
-      else if (token == "isready")
-      {
-          //Make sure experience has finished loading
-          Experience::wait_for_loading_finished();
-
-          sync_cout << "readyok" << sync_endl;
-      }
+      else if (token == "isready")    sync_cout << "readyok" << sync_endl;
 
       // Add custom non-UCI commands, mainly for debugging purposes.
       // These commands must not be used during a search!
@@ -290,11 +273,6 @@ void UCI::loop(int argc, char* argv[]) {
       else if (token == "d")        sync_cout << pos << sync_endl;
       else if (token == "eval")     trace_eval(pos);
       else if (token == "compiler") sync_cout << compiler_info() << sync_endl;
-      else if (argc > 2 && token == "defrag")   Experience::defrag(argc - 2, argv + 2);
-      else if (argc > 2 && token == "merge")    Experience::merge(argc - 2, argv + 2);
-      else if (token == "exp")                  Experience::show_exp(pos, false);
-      else if (token == "expex")                Experience::show_exp(pos, true);
-      else if (argc > 2 && token == "convert_compact_pgn") Experience::convert_compact_pgn(argc - 2, argv + 2);
       else if (token == "--help" || token == "help" || token == "--license" || token == "license")
           sync_cout << "\nStockfish is a powerful chess engine for playing and analyzing."
                        "\nIt is released as free software licensed under the GNU GPLv3 License."
@@ -321,13 +299,8 @@ string UCI::value(Value v) {
 
   stringstream ss;
 
-  if (abs(v) < VALUE_TB_WIN_IN_MAX_PLY)
-      ss << "cp " << v * 100 / NormalizeToPawnValue;
-  else if (abs(v) < VALUE_MATE_IN_MAX_PLY)
-  {
-      const int ply = VALUE_MATE_IN_MAX_PLY - 1 - std::abs(v);  // recompute ss->ply
-      ss << "cp " << (v > 0 ? 20000 - ply : -20000 + ply);
-  }
+  if (abs(v) < VALUE_MATE_IN_MAX_PLY)
+      ss << "cp " << v * 100 / PawnValueEg;
   else
       ss << "mate " << (v > 0 ? VALUE_MATE - v + 1 : -VALUE_MATE - v) / 2;
 

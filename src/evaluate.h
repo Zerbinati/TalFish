@@ -31,6 +31,8 @@ namespace Eval {
 
   void print_classical_eval_message();
   std::string trace(Position& pos);
+
+
   Value evaluate(const Position& pos);
 
 } // namespace Eval
