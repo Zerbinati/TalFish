@@ -16,12 +16,16 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstring>   // For std::memset
 #include <iostream>
 #include <sstream>
+#include <random>     // For std::mt19937 and std::uniform_int_distribution
+#include <algorithm>  // For std::stable_sort and std::min
+#include <thread>     // (opzionale, per delay se usi std::this_thread::sleep_for)
+#include <chrono>     // (opzionale, per delay con sleep_for)
+
 
 #include "polybook.h"
 #include "evaluate.h"
@@ -237,28 +241,42 @@ void MainThread::search() {
       Time.availableNodes += Limits.inc[us] - Threads.nodes_searched();
 
   Thread* bestThread = this;
+  
+    // Random generator (only one declaration allowed)
+    static std::random_device rd;
+    static std::mt19937 rng(rd());
 
-	int humanImperfection  = Stockfish::activePersonality.get_evaluation_param("HumanImperfection", 0);
+    int humanImperfection  = Stockfish::activePersonality.get_evaluation_param("HumanImperfection", 0);
+    int blunderRate        = Stockfish::activePersonality.BlunderRate;
+    int inaccuracyBias     = Stockfish::activePersonality.InaccuracyBias;
+    int randomMoveDepth    = Stockfish::activePersonality.RandomMoveDepth;
+    int moveDelayMs        = Stockfish::activePersonality.MoveDelayMs;
+    bool trainingMode      = Stockfish::activePersonality.TrainingMode;
 
-	// Print **`SEARCH PARAMETERS`** only if the personality has been changed
-	if (Stockfish::UCI::personalityChanged) {
-		std::cout << "info string === SEARCH PARAMETERS ===" << std::endl;
-	    std::cout << "info string HumanImperfection: " << humanImperfection << std::endl;
+    // Print search parameters only if the personality has been changed
+    if (Stockfish::UCI::personalityChanged) {
+        std::cout << "info string === SEARCH PARAMETERS ===" << std::endl;
+        std::cout << "info string HumanImperfection: " << humanImperfection << std::endl;
+        std::cout << "info string BlunderRate: "       << blunderRate << std::endl;
+        std::cout << "info string InaccuracyBias: "    << inaccuracyBias << std::endl;
+        std::cout << "info string RandomMoveDepth: "   << randomMoveDepth << " (apply randomness at depth ≥ D)" << std::endl;
+        std::cout << "info string MoveDelayMs: "       << moveDelayMs << std::endl;
+        std::cout << "info string TrainingMode: "      << (trainingMode ? "true" : "false") << std::endl;
+        std::cout << "info string ==========================" << std::endl;
 
-    std::cout << "info string ==========================" << std::endl;
+        Stockfish::UCI::personalityChanged = false;
+    }
 
-		Stockfish::UCI::personalityChanged = false;
-	}
-  static int lastElo = -1;  // Store the previous Elo value
+    static int lastElo = -1;  // Store the previous Elo value
 
-  int currentElo = int(Options["Elo"]);
+    int currentElo = int(Options["Elo"]);
 
-  if (currentElo != lastElo) {  // Print only if the value has changed
-      std::cout << "info string DEBUG: UCI Elo = " << currentElo << std::endl;
-      lastElo = currentElo;  // Update lastElo with the new value
-  }
+    if (currentElo != lastElo) {  // Print only if the value has changed
+        std::cout << "info string DEBUG: UCI Elo = " << currentElo << std::endl;
+        lastElo = currentElo;  // Update lastElo with the new value
+    }
 
-  Skill skill = Skill(Options["Skill Level"], currentElo);  // Use the current Elo value
+    Skill skill = Skill(Options["Skill Level"], currentElo);  // Use the current Elo value
 
   if (   int(Options["MultiPV"]) == 1
       && !Limits.depth
@@ -269,30 +287,98 @@ void MainThread::search() {
   bestPreviousScore = bestThread->rootMoves[0].score;
   bestPreviousAverageScore = bestThread->rootMoves[0].averageScore;
 
-  // Send again PV info if we have a new best thread
-  if (bestThread != this)
-      sync_cout << UCI::pv(bestThread->rootPos, bestThread->completedDepth) << sync_endl;
+// Optional randomization at move selection stage (for human-like unpredictability)
+if (randomMoveDepth > 0 && bestThread->completedDepth >= randomMoveDepth) {
 
-  // Retrieve the value of HumanImperfection
-  int imperfection = int(Options["HumanImperfection"]);
+    std::vector<RootMove>& moves = bestThread->rootMoves;
 
-  // If HumanImperfection > 0, we might choose a suboptimal move
-  if (imperfection > 0 && bestThread->rootMoves.size() > 1) {
-      int randomValue = rand() % 100; // Random number between 0 and 99
+    if (!moves.empty()) {
+        // Sort moves by descending score
+        std::stable_sort(moves.begin(), moves.end(), [](const RootMove& a, const RootMove& b) {
+            return a.score > b.score;
+        });
 
-      // If the random value is lower than HumanImperfection, choose a worse move
-      if (randomValue < imperfection) {
-          std::cout << "info string [Human Imperfection] Altering best move selection..." << std::endl;
-          std::swap(bestThread->rootMoves[0], bestThread->rootMoves[1]); // Choose the second-best move
-      }
-  }
+        int topN = std::min(3, int(moves.size())); // You may later make this tunable
 
-  sync_cout << "bestmove " << UCI::move(bestThread->rootMoves[0].pv[0], rootPos.is_chess960());
+        // Use global/static RNG only once
+        std::uniform_int_distribution<int> dist(0, topN - 1);
 
-  if (bestThread->rootMoves[0].pv.size() > 1 || bestThread->rootMoves[0].extract_ponder_from_tt(rootPos))
-      std::cout << " ponder " << UCI::move(bestThread->rootMoves[0].pv[1], rootPos.is_chess960());
+        int randomIndex = dist(rng);
+        Move randomizedMove = moves[randomIndex].pv[0];
 
-  std::cout << sync_endl;
+        std::cout << "info string RANDOMIZED MOVE SELECTED at depth >= " << randomMoveDepth
+                  << ": move " << UCI::move(randomizedMove, rootPos.is_chess960())
+                  << " instead of best " << UCI::move(moves[0].pv[0], rootPos.is_chess960()) << std::endl;
+
+        bestThread->rootMoves[0] = moves[randomIndex];  // Override best move
+    }
+}
+
+// Send again PV info if we have a new best thread
+if (bestThread != this)
+    sync_cout << UCI::pv(bestThread->rootPos, bestThread->completedDepth) << sync_endl;
+
+// Retrieve active personality parameters
+int imperfection     = int(Options["HumanImperfection"]);
+/*int blunderRate      = Stockfish::activePersonality.BlunderRate;
+int inaccuracyBias   = Stockfish::activePersonality.InaccuracyBias;
+int randomMoveDepth  = Stockfish::activePersonality.RandomMoveDepth;
+int moveDelayMs      = Stockfish::activePersonality.MoveDelayMs;
+bool trainingMode    = Stockfish::activePersonality.TrainingMode;
+*/
+// Enhance parameters if TrainingMode is enabled
+if (trainingMode) {
+    imperfection    = std::min(imperfection + 10, 100);   // Increase error chance
+    inaccuracyBias  = std::min(inaccuracyBias + 10, 100);
+    blunderRate     = std::max(blunderRate, 30);          // Force at least 30%
+}
+
+// Determine if injection of imperfection is allowed at this depth
+const bool errorInjectionAllowed = (randomMoveDepth <= 0) || (bestThread->completedDepth <= randomMoveDepth);
+
+if (errorInjectionAllowed) {
+
+    const size_t moveCount = bestThread->rootMoves.size();
+    std::uniform_int_distribution<int> chance(0, 99);  // Shared for all checks
+
+    if (imperfection > 0 && moveCount > 1 && chance(rng) < imperfection) {
+        std::cout << "info string [Human Imperfection] Swapping best with 2nd best move (" << imperfection << "% chance)" << std::endl;
+        std::swap(bestThread->rootMoves[0], bestThread->rootMoves[1]);
+    }
+    else if (inaccuracyBias > 0 && moveCount > 2 && chance(rng) < inaccuracyBias) {
+        std::uniform_int_distribution<int> select(1, 2); // pick 2nd or 3rd best
+        int moveIdx = select(rng);
+        std::cout << "info string [Inaccuracy Bias] Selecting move #" << (moveIdx + 1)
+                  << " due to InaccuracyBias (" << inaccuracyBias << "%)" << std::endl;
+        std::swap(bestThread->rootMoves[0], bestThread->rootMoves[moveIdx]);
+    }
+    else if (blunderRate > 0 && moveCount > 2 && chance(rng) < blunderRate) {
+        std::uniform_int_distribution<int> select(1, int(moveCount - 1));
+        int moveIdx = select(rng);
+        std::cout << "info string [Blunder] Selecting move #" << (moveIdx + 1)
+                  << " due to BlunderRate (" << blunderRate << "%)" << std::endl;
+        std::swap(bestThread->rootMoves[0], bestThread->rootMoves[moveIdx]);
+    }
+}
+else {
+    std::cout << "info string [RandomMoveDepth] Depth " << bestThread->completedDepth
+              << " exceeds threshold " << randomMoveDepth
+              << ", skipping imperfections." << std::endl;
+}
+
+// Apply human-like move delay
+if (moveDelayMs > 0) {
+    std::cout << "info string Delaying move output by " << moveDelayMs << " ms" << std::endl;
+    std::this_thread::sleep_for(std::chrono::milliseconds(moveDelayMs));
+}
+
+// Output bestmove and optional ponder
+sync_cout << "bestmove " << UCI::move(bestThread->rootMoves[0].pv[0], rootPos.is_chess960());
+
+if (bestThread->rootMoves[0].pv.size() > 1 || bestThread->rootMoves[0].extract_ponder_from_tt(rootPos))
+    std::cout << " ponder " << UCI::move(bestThread->rootMoves[0].pv[1], rootPos.is_chess960());
+
+std::cout << sync_endl;
 }
 
 /// Thread::search() is the main iterative deepening loop. It calls search()

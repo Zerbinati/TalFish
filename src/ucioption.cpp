@@ -97,6 +97,7 @@ void init(OptionsMap& o) {
     o["UCI_Chess960"]          << Option(false);
     o["UCI_ShowWDL"]           << Option(false);
     o["Personality"]           << Option(false);
+
     o["Elo"] << Option(1320, 1320, 3190, [](const Option& v) {
         int uci_elo = int(v);
         std::cout << "info string UCI Elo changed to " << uci_elo << std::endl;
@@ -108,6 +109,7 @@ void init(OptionsMap& o) {
         std::cout << "info string Calculated HumanImperfection: " << humanImperfection << std::endl;
         activePersonality.set_param("HumanImperfection", humanImperfection);
     });
+
     // Book Options
     o["PersonalityBook"]   << Option(false, [](const Option& v) { activePersonality.PersonalityBook = bool(v); });
     o["Book File"]         << Option("<empty>", on_book_file);
@@ -115,7 +117,14 @@ void init(OptionsMap& o) {
     o["Book Depth"]        << Option(1, 1, 30, [](const Option& v) { activePersonality.BookDepth = int(v); });
     o["HumanImperfection"] << Option(0, 0, 50, [](const Option& v) { activePersonality.set_param("HumanImperfection", int(v)); });
 
-    // Sincronizza con la GUI e aggiorna
+    // Human training options
+    o["TrainingMode"]      << Option(false, [](const Option& v) { activePersonality.TrainingMode = bool(v); });
+    o["BlunderRate"]       << Option(0, 0, 100, [](const Option& v) { activePersonality.BlunderRate = int(v); });
+    o["InaccuracyBias"]    << Option(0, 0, 100, [](const Option& v) { activePersonality.InaccuracyBias = int(v); });
+    o["RandomMoveDepth"]   << Option(0, 0, 20,  [](const Option& v) { activePersonality.RandomMoveDepth = int(v); });
+    o["MoveDelayMs"]       << Option(0, 0, 10000, [](const Option& v) { activePersonality.MoveDelayMs = int(v); });
+
+    // Synchronization and output
     sync_uci_options();
     Stockfish::UCI::personalityChanged = true;
     Stockfish::activePersonality = activePersonality;
@@ -138,6 +147,15 @@ void init(OptionsMap& o) {
     }
 
     std::cout << "info string - HumanImperfection: " << activePersonality.get_evaluation_param("HumanImperfection", 0) << std::endl;
+
+    if (activePersonality.TrainingMode) {
+        std::cout << "info string Training mode ON" << std::endl;
+        std::cout << "info string Blunder Rate: " << activePersonality.BlunderRate << "%" << std::endl;
+        std::cout << "info string Inaccuracy Bias: " << activePersonality.InaccuracyBias << "%" << std::endl;
+        std::cout << "info string Random Move Depth: " << activePersonality.RandomMoveDepth << std::endl;
+        std::cout << "info string Move Delay (ms): " << activePersonality.MoveDelayMs << std::endl;
+    }
+
     std::cout << "info string UCI options successfully synced with personality!" << std::endl;
     std::cout << "isready" << std::endl;
     std::cout << "uci" << std::endl;

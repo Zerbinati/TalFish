@@ -3,25 +3,37 @@
 
 namespace Stockfish {
 
-// Definizione della variabile globale
+// Global instance of the active personality, used by the engine
 Personality activePersonality;
 
-// Stub: Simula il caricamento, ma non fa nulla realmente
-bool Personality::load_from_file(const std::string& path) {
-    std::cout << "info string Personality system initialized with default values (path: " << path << ")" << std::endl;
-    return true; // sempre vero per ora
+// Initialize the personality system with default hardcoded values
+bool Personality::load_from_file(const std::string&) {
+    std::cout << "info string Personality system initialized with default internal values" << std::endl;
+
+    // Static values set at startup
+    BlunderRate       = 0;
+    InaccuracyBias    = 0;
+    RandomMoveDepth   = 0;
+    MoveDelayMs       = 0;
+    TrainingMode      = false;
+
+    // Set dynamic parameter defaults
+    set_param("HumanImperfection", 0);
+
+    return true;
 }
 
-// Setta un parametro di valutazione personalizzato
+// Assigns a named evaluation parameter (dynamic)
 void Personality::set_param(const std::string& name, int value) {
     evalParams[name] = value;
 }
 
-// Ottiene il valore di un parametro, o ritorna un valore di fallback
+// Retrieves a dynamic evaluation parameter, or fallback if not set
 int Personality::get_evaluation_param(const std::string& name, int fallback) const {
     auto it = evalParams.find(name);
     return it != evalParams.end() ? it->second : fallback;
 }
 
 } // namespace Stockfish
+
 

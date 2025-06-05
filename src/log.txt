@@ -1,0 +1,116 @@
+ition=one   -c -o uci.o uci.cpp
+search.cpp: In member function 'virtual void Stockfish::MainThread::search()':
+search.cpp:326:7: error: 'imperfection' was not declared in this scope
+  326 |       imperfection    = std::min(imperfection + 10, 100);   // Increase error chance
+      |       ^~~~~~~~~~~~
+search.cpp:341:11: error: 'imperfection' was not declared in this scope
+  341 |       if (imperfection > 0 && moveCount > 1) {
+      |           ^~~~~~~~~~~~
+search.cpp:342:46: warning: declaration of 'dist' shadows a previous local [-Wshadow]
+  342 |           std::uniform_int_distribution<int> dist(0, 99);
+      |                                              ^~~~
+search.cpp:301:48: note: shadowed declaration is here
+  301 |             std::uniform_int_distribution<int> x86_64-w64-mingw32-c++  -Wall -Wcast-qual -fno-exceptions -std=c++17 -fprofile-generate=profdir -pedantic -Wextra -Wshadow -Wmissing-declarations -DNDEBUG -O3 -funroll-loops -DIS_64BIT -msse -msse3 -mpopcnt -DUSE_POPCNT -DUSE_AVX2 -mavx2 -mbmi -DUSE_SSE41 -msse4.1 -DUSE_SSSE3 -mssse3 -DUSE_SSE2 -msse2 -DGIT_SHA=d45ca31a -DGIT_DATE=20250603 -flto -flto-partition=one   -c -o ucioption.o ucioption.cpp
+dist(0, topN - 1);
+      |                                                ^~~~
+search.cpp:349:46: warning: declaration of 'dist' shadows a previous local [-Wshadow]
+  349 |           std::uniform_int_distribution<int> dist(0, 99);
+      |                                              ^~~~
+search.cpp:301:48: note: shadowed declaration is here
+  301 |             std::uniform_int_distribution<int> dist(0, topN - 1);
+      |                                                ^~~~
+search.cpp:359:46: warning: declaration of 'dist' shadows a previous local [-Wshadow]
+  359 |           std::uniform_int_distribution<int> dist(0, 99);
+      |                                              ^~~~
+search.cpp:301:48: note: shadowed declaration is here
+  301 |             std::uniform_int_distribution<int> dist(0, topN - 1);
+      |                                                ^~~~
+search.cpp:394:20: error: qualified-id in declaration before '(' token
+  394 | void Thread::search() {
+      |                    ^
+search.cpp:638:11: error: expected identifier before '{' token
+  638 | namespace {
+      |           ^
+search.cpp:642:3: error: a template declaration cannot appear at block scope
+  642 |   template <NodeType nodeType>
+      |   ^~~~~~~~
+search.cpp:1715:39: error: a function-definition is not allowed here before '{' token
+ 1715 |   Value value_to_tt(Value v, int ply) {
+      |                                       ^
+search.cpp:1730:51: error: a function-definition is not allowed here before '{' token
+ 1730 |   Value value_from_tt(Value v, int ply, int r50c) {
+      |                                                   ^
+search.cpp:1757:60: error: a function-definition is not allowed here before '{' token
+ 1757 |   void update_pv(Move* pv, Move move, const Move* childPv) {
+      |                                                            ^
+search.cpp:1768:118: error: a function-definition is not allowed here before '{' token
+ 1768 |                         Move* quietsSearched, int quietCount, Move* capturesSearched, int captureCount, Depth depth) {
+      |                                                                                                                      ^
+search.cpp:1820:81: error: a function-definition is not allowed here before '{' token
+ 1820 |   void update_continuation_histories(Stack* ss, Piece pc, Square to, int bonus) {
+      |                                                                                 ^
+search.cpp:1835:81: error: a function-definition is not allowed here before '{' token
+ 1835 |   void update_quiet_stats(const Position& pos, Stack* ss, Move move, int bonus) {
+      |                                                                                 ^
+search.cpp:1860:24: error: qualified-id in declaration before '(' token
+ 1860 |   Move Skill::pick_best(size_t multiPV) {
+      |                        ^
+search.cpp:1896:28: error: qualified-id in declaration before '(' token
+ 1896 | void MainThread::check_time() {
+      |                            ^
+search.cpp:1929:15: error: qualified-id in declaration before '(' token
+ 1929 | string UCI::pv(const Position& pos, Depth depth) {
+      |               ^
+search.cpp:1985:38: error: qualified-id in declaration before '(' token
+ 1985 | bool RootMove::extract_ponder_from_tt(Position& pos) {
+      |                                      ^
+search.cpp:2010:2: error: expected '}' at end of input
+ 2010 | } // namespace Stockfish
+      |  ^
+search.cpp:181:27: note: to match this '{'
+  181 | void MainThread::search() {
+      |                           ^
+search.cpp: At global scope:
+search.cpp:2010:2: error: expected '}' at end of input
+ 2010 | } // namespace Stockfish
+      |  ^
+search.cpp:44:21: note: to match this '{'
+   44 | namespace Stockfish {
+      |                     ^
+search.cpp:119:9: warning: 'Stockfish::Value Stockfish::{anonymous}::value_to_tt(Stockfish::Value, int)' declared 'static' but never defined [-Wunused-function]
+  119 |   Value value_to_tt(Value v, int ply);
+      |         ^~~~~~~~~~~
+search.cpp:120:9: warning: 'Stockfish::Value Stockfish::{anonymous}::value_from_tt(Stockfish::Value, int, int)' declared 'static' but never defined [-Wunused-function]
+  120 |   Value value_from_tt(Value v, int ply, int r50c);
+      |         ^~~~~~~~~~~~~
+search.cpp:121:8: warning: 'void Stockfish::{anonymous}::update_pv(Stockfish::Move*, Stockfish::Move, const Stockfish::Move*)' declared 'static' but never defined [-Wunused-function]
+  121 |   void update_pv(Move* pv, Move move, const Move* childPv);
+      |        ^~~~~~~~~
+search.cpp:122:8: warning: 'void Stockfish::{anonymous}::update_continuation_histories(Stockfish::Search::Stack*, Stockfish::Piece, Stockfish::Square, int)' declared 'static' but never defined [-Wunused-function]
+  122 |   void update_continuation_histories(Stack* ss, Piece pc, Square to, int bonus);
+      |        ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+search.cpp:123:8: warning: 'void Stockfish::{anonymous}::update_quiet_stats(const Stockfish::Position&, Stockfish::Search::Stack*, Stockfish::Move, int)' declared 'static' but never defined [-Wunused-function]
+  123 |   void update_quiet_stats(const Position& pos, Stack* ss, Move move, int bonus);
+      |        ^~~~~~~~~~~~~~~~~~
+search.cpp:124:8: warning: 'void Stockfish::{anonymous}::update_all_stats(const Stockfish::Position&, Stockfish::Search::Stack*, Stockfish::Move, Stockfish::Value, Stockfish::Value, Stockfish::Square, Stockfish::Move*, int, Stockfish::Move*, int, Stockfish::Depth)' declared 'static' but never defined [-Wunused-function]
+  124 |   void update_all_stats(const Position& pos, Stack* ss, Move bestMove, Value bestValue, Value beta, Square prevSq,
+      |        ^~~~~~~~~~~~~~~~
+search.cpp:87:9: warning: 'Stockfish::Value Stockfish::{anonymous}::value_draw(const Stockfish::Thread*)' defined but not used [-Wunused-function]
+   87 |   Value value_draw(const Thread* thisThread) {
+      |         ^~~~~~~~~~
+search.cpp:82:7: warning: 'int Stockfish::{anonymous}::stat_bonus(Stockfish::Depth)' defined but not used [-Wunused-function]
+   82 |   int stat_bonus(Depth d) {
+      |       ^~~~~~~~~~
+search.cpp:71:9: warning: 'Stockfish::Depth Stockfish::{anonymous}::reduction(bool, Stockfish::Depth, int, Stockfish::Value, Stockfish::Value)' defined but not used [-Wunused-function]
+   71 |   Depth reduction(bool i, Depth d, int mn, Value delta, Value rootDelta) {
+      |         ^~~~~~~~~
+search.cpp:64:9: warning: 'Stockfish::Value Stockfish::{anonymous}::futility_margin(Stockfish::Depth, bool)' defined but not used [-Wunused-function]
+   64 |   Value futility_margin(Depth d, bool improving) {
+      |         ^~~~~~~~~~~~~~~
+mingw32-make[2]: *** [<builtin>: search.o] Error 1
+mingw32-make[2]: *** Waiting for unfinished jobs....
+mingw32-make[2]: Leaving directory 'C:/Users/zerbi/OneDrive/Documenti/GitHub/TalFish/src'
+mingw32-make[1]: *** [Makefile:978: gcc-profile-make] Error 2
+mingw32-make[1]: Leaving directory 'C:/Users/zerbi/OneDrive/Documenti/GitHub/TalFish/src'
+mingw32-make: *** [Makefile:851: profile-build] Error 2
+PS C:\Users\zerbi\OneDrive\Documenti\GitHub\TalFish\src>
