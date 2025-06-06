@@ -91,7 +91,7 @@ namespace {
 
 /// Version number. If Version is left empty, then compile date in the format
 /// DD-MM-YY and show in engine_info.
-const string Version = "p1.01";
+const string Version = "v1.01";
 
 bool LPMessage = false;
 
@@ -172,7 +172,7 @@ string engine_info(bool to_uci) {
   string month, day, year;
   stringstream ss, date(__DATE__); // From compiler, format is "Sep 21 2008"
 
-  ss << "HypnoS ++ " << Version << setfill('0');
+  ss << "HumanMind " << Version << setfill('0');
 
   ss << (to_uci  ? "\nid author ": " by ")
      << "M.Z";

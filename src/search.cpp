@@ -189,6 +189,20 @@ void MainThread::search() {
 
   Color us = rootPos.side_to_move();
   Time.init(Limits, us, rootPos.game_ply());
+
+    // Automatic TrainingMode based on Elo and time
+    if (!Stockfish::activePersonality.TrainingMode) {
+        int uciElo = int(Options["Elo"]);
+        bool lowElo = uciElo <= 1600;
+        bool isBlitz = Limits.time[us] <= 180000 || Limits.movetime <= 2000;
+
+        if (lowElo || isBlitz) {
+            Stockfish::activePersonality.TrainingMode = true;
+            std::cout << "info string TrainingMode activated automatically due to "
+                      << (lowElo ? "low Elo" : "short time control") << std::endl;
+        }
+    }
+
   TT.new_search();
 
   Move bookMove = MOVE_NONE;

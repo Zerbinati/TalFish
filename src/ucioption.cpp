@@ -102,12 +102,35 @@ void init(OptionsMap& o) {
         int uci_elo = int(v);
         std::cout << "info string UCI Elo changed to " << uci_elo << std::endl;
 
-        // Calculate HumanImperfection by Elo
+        // === HumanImperfection Calculation ===
         int humanImperfection = ((3190 - uci_elo) * 50) / (3190 - 1320);
-        humanImperfection = std::clamp(humanImperfection, 0, 50); // Let's make sure it's in the correct range
-
-        std::cout << "info string Calculated HumanImperfection: " << humanImperfection << std::endl;
+        humanImperfection = std::clamp(humanImperfection, 0, 50);
         activePersonality.set_param("HumanImperfection", humanImperfection);
+        std::cout << "info string Calculated HumanImperfection: " << humanImperfection << std::endl;
+
+        // === Dynamic RandomMoveDepth calculation ===
+        int dynamicRandomDepth = 4 + (uci_elo - 1320) * 16 / (3190 - 1320);
+        dynamicRandomDepth = std::clamp(dynamicRandomDepth, 0, 20);
+        activePersonality.RandomMoveDepth = dynamicRandomDepth;
+        std::cout << "info string Calculated RandomMoveDepth: " << dynamicRandomDepth << std::endl;
+
+        // === Dynamic MoveDelayMs calculation ===
+        int delayMs = 1000 - (uci_elo - 1320) * 900 / (3190 - 1320);
+        delayMs = std::clamp(delayMs, 100, 1000);
+        activePersonality.MoveDelayMs = delayMs;
+        std::cout << "info string Calculated MoveDelayMs: " << delayMs << " ms" << std::endl;
+
+        // === Dynamic BlunderRate calculation ===
+        int blunderRate = ((3190 - uci_elo) * 50) / (3190 - 1320);
+        blunderRate = std::clamp(blunderRate, 0, 50);
+        activePersonality.BlunderRate = blunderRate;
+        std::cout << "info string Calculated BlunderRate: " << blunderRate << "%" << std::endl;
+
+        // === Optional: Enable TrainingMode automatically at low Elo ===
+        if (uci_elo <= 1600) {
+            activePersonality.TrainingMode = true;
+            std::cout << "info string TrainingMode activated automatically for Elo <= 1600" << std::endl;
+        }
     });
 
     // Book Options
@@ -115,14 +138,9 @@ void init(OptionsMap& o) {
     o["Book File"]         << Option("<empty>", on_book_file);
     o["Book Width"]        << Option(1, 1, 20, [](const Option& v) { activePersonality.BookWidth = int(v); });
     o["Book Depth"]        << Option(1, 1, 30, [](const Option& v) { activePersonality.BookDepth = int(v); });
-    o["HumanImperfection"] << Option(0, 0, 50, [](const Option& v) { activePersonality.set_param("HumanImperfection", int(v)); });
 
     // Human training options
     o["TrainingMode"]      << Option(false, [](const Option& v) { activePersonality.TrainingMode = bool(v); });
-    o["BlunderRate"]       << Option(0, 0, 100, [](const Option& v) { activePersonality.BlunderRate = int(v); });
-    o["InaccuracyBias"]    << Option(0, 0, 100, [](const Option& v) { activePersonality.InaccuracyBias = int(v); });
-    o["RandomMoveDepth"]   << Option(0, 0, 20,  [](const Option& v) { activePersonality.RandomMoveDepth = int(v); });
-    o["MoveDelayMs"]       << Option(0, 0, 10000, [](const Option& v) { activePersonality.MoveDelayMs = int(v); });
 
     // Synchronization and output
     sync_uci_options();
@@ -151,7 +169,6 @@ void init(OptionsMap& o) {
     if (activePersonality.TrainingMode) {
         std::cout << "info string Training mode ON" << std::endl;
         std::cout << "info string Blunder Rate: " << activePersonality.BlunderRate << "%" << std::endl;
-        std::cout << "info string Inaccuracy Bias: " << activePersonality.InaccuracyBias << "%" << std::endl;
         std::cout << "info string Random Move Depth: " << activePersonality.RandomMoveDepth << std::endl;
         std::cout << "info string Move Delay (ms): " << activePersonality.MoveDelayMs << std::endl;
     }
