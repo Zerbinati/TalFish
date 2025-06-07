@@ -40,26 +40,11 @@ std::string previousBookFile = "<empty>"; // Tracks the last loaded book
 
 namespace UCI {
 
-void sync_uci_options(); // Declaration
+void sync_uci_options(); // Declaration to avoid the warning
 
 bool personalityChanged = true; // Global variable
 
-void sync_uci_options() {
-    std::cout << "info string Syncing UCI options with active personality..." << std::endl;
-
-    Options["PersonalityBook"] = std::string(activePersonality.PersonalityBook ? "true" : "false");
-    Options["Book File"] = activePersonality.BookFile;
-    Options["Book Width"] = std::to_string(activePersonality.BookWidth);
-    Options["Book Depth"] = std::to_string(activePersonality.BookDepth);
-    Options["HumanImperfection"] = std::to_string(activePersonality.get_evaluation_param("HumanImperfection", 0));
-
-    std::cout << "setoption name HumanImperfection value " << Options["HumanImperfection"] << std::endl;
-    std::cout << "info string UCI options successfully synced." << std::endl;
-
-    std::cout << "isready" << std::endl;
-    std::cout << "uci" << std::endl;
-}
-
+/// 'On change' actions, triggered by an option's value change
 static void on_clear_hash(const Option&) { Search::clear(); }
 static void on_hash_size(const Option& o) { TT.resize(size_t(o)); }
 static void on_logger(const Option& o) { start_logger(o); }
@@ -69,14 +54,32 @@ static void on_exp_file(const Option& /*o*/) { Experience::init(); }
 
 static void on_book_file(const Option& o) {
     std::string newBookFile = static_cast<std::string>(o);
-    std::cout << "info string Book file changed to: " << newBookFile << std::endl;
+    std::cout << "info string Book file set to: " << newBookFile << std::endl;
 
-    if (newBookFile != previousBookFile) {
-        activePersonality.BookFile = newBookFile;
-        polybook[0].init(newBookFile);
-        previousBookFile = newBookFile;
-        std::cout << "info string Book loaded: " << newBookFile << std::endl;
-    }
+    activePersonality.BookFile = newBookFile;
+    polybook[0].init(newBookFile);
+    previousBookFile = newBookFile;
+
+    std::cout << "info string Book loaded: " << newBookFile << std::endl;
+}
+
+void sync_uci_options() {
+ std::cout << "info string Syncing UCI options with active personality..." << std::endl;
+
+															   
+													 
+    Options["PersonalityBook"] = std::string(activePersonality.PersonalityBook ? "true" : "false");
+    Options["Book File"] = activePersonality.BookFile;
+    Options["Book Width"] = std::to_string(activePersonality.BookWidth);
+    Options["Book Depth"] = std::to_string(activePersonality.BookDepth);
+    Options["HumanImperfection"] = std::to_string(activePersonality.get_evaluation_param("HumanImperfection", 0));
+
+    std::cout << "setoption name HumanImperfection value " << Options["HumanImperfection"] << std::endl;
+    std::cout << "info string UCI options successfully synced." << std::endl;
+
+    // Force the GUI to reload the updated options
+    std::cout << "isready" << std::endl;
+    std::cout << "uci" << std::endl;
 }
 
 bool CaseInsensitiveLess::operator() (const string& s1, const string& s2) const {
@@ -86,6 +89,9 @@ bool CaseInsensitiveLess::operator() (const string& s1, const string& s2) const 
 
 void init(OptionsMap& o) {
     constexpr int MaxHashMB = Is64Bit ? 33554432 : 2048;
+
+    // Impostazione esplicita di default per evitare problemi
+    activePersonality.PersonalityBook = true;
 
     o["Debug Log File"]        << Option("", on_logger);
     o["Threads"]               << Option(1, 1, 1, on_threads);
@@ -137,8 +143,9 @@ void init(OptionsMap& o) {
     });
 
     // Book Options
-    o["PersonalityBook"]   << Option(false, [](const Option& v) { activePersonality.PersonalityBook = bool(v); });
-    o["Book File"]         << Option("<empty>", on_book_file);
+    o["PersonalityBook"]   << Option(true, [](const Option& v) { activePersonality.PersonalityBook = bool(v); });
+    o["Book File"]         << Option("Human.bin", on_book_file);
+    on_book_file(o["Book File"]);  // <-- Aggiunta questa chiamata per caricare subito il libro all'avvio
     o["Book Width"]        << Option(1, 1, 20, [](const Option& v) { activePersonality.BookWidth = int(v); });
     o["Book Depth"]        << Option(1, 1, 30, [](const Option& v) { activePersonality.BookDepth = int(v); });
     o["Experience Enabled"]                  << Option(true, on_exp_enabled);
@@ -153,6 +160,11 @@ void init(OptionsMap& o) {
     o["TrainingMode"]      << Option(false, [](const Option& v) { activePersonality.TrainingMode = bool(v); });
 
     // Synchronization and output
+    // Carica libro solo se PersonalityBook attivo
+    if (activePersonality.PersonalityBook) {
+        on_book_file(o["Book File"]);
+    }
+
     sync_uci_options();
     Stockfish::UCI::personalityChanged = true;
     Stockfish::activePersonality = activePersonality;
@@ -187,6 +199,7 @@ void init(OptionsMap& o) {
     std::cout << "isready" << std::endl;
     std::cout << "uci" << std::endl;
 }
+
 
 std::ostream& operator<<(std::ostream& os, const OptionsMap& om) {
     for (size_t idx = 0; idx < om.size(); ++idx)

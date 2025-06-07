@@ -175,7 +175,7 @@ string engine_info(bool to_uci) {
   ss << "HumanMind " << Version << setfill('0');
 
   ss << (to_uci  ? "\nid author ": " by ")
-     << "M.Z";
+     << "M.Z and the Stockfish developers (see AUTHORS file)";
 
 
   if (!to_uci)
