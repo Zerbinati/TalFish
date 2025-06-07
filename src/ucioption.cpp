@@ -22,6 +22,7 @@
 #include <sstream>
 
 #include "evaluate.h"
+#include "experience.h"
 #include "misc.h"
 #include "search.h"
 #include "thread.h"
@@ -63,6 +64,8 @@ static void on_clear_hash(const Option&) { Search::clear(); }
 static void on_hash_size(const Option& o) { TT.resize(size_t(o)); }
 static void on_logger(const Option& o) { start_logger(o); }
 static void on_threads(const Option& o) { Threads.set(size_t(o)); }
+static void on_exp_enabled(const Option& /*o*/) { Experience::init(); }
+static void on_exp_file(const Option& /*o*/) { Experience::init(); }
 
 static void on_book_file(const Option& o) {
     std::string newBookFile = static_cast<std::string>(o);
@@ -85,7 +88,7 @@ void init(OptionsMap& o) {
     constexpr int MaxHashMB = Is64Bit ? 33554432 : 2048;
 
     o["Debug Log File"]        << Option("", on_logger);
-    o["Threads"]               << Option(1, 1, 1024, on_threads);
+    o["Threads"]               << Option(1, 1, 1, on_threads);
     o["Hash"]                  << Option(16, 1, MaxHashMB, on_hash_size);
     o["Clear Hash"]            << Option(on_clear_hash);
     o["Ponder"]                << Option(false);
@@ -138,6 +141,13 @@ void init(OptionsMap& o) {
     o["Book File"]         << Option("<empty>", on_book_file);
     o["Book Width"]        << Option(1, 1, 20, [](const Option& v) { activePersonality.BookWidth = int(v); });
     o["Book Depth"]        << Option(1, 1, 30, [](const Option& v) { activePersonality.BookDepth = int(v); });
+    o["Experience Enabled"]                  << Option(true, on_exp_enabled);
+    o["Experience File"]                     << Option("HumanMind.exp", on_exp_file);
+    o["Experience Book"]                     << Option(false);
+    o["Experience Book Best Move"]           << Option(true);
+    o["Experience Book Eval Importance"]     << Option(5, 0, 10);
+    o["Experience Book Min Depth"]           << Option(27, EXP_MIN_DEPTH, 64);
+    o["Experience Book Max Moves"]           << Option(100, 1, 100);
 
     // Human training options
     o["TrainingMode"]      << Option(false, [](const Option& v) { activePersonality.TrainingMode = bool(v); });

@@ -341,7 +341,7 @@ void show_logo()
 
     cout <<
         R"(
-Bobby Fisher Personality Serie 
+HumanMind Personality Series 
 
 )" << endl;
 
